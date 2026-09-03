@@ -1,5 +1,5 @@
 #!/bin/bash
-# Замените <REGISTRY_ID> на ваш ID регистри
+
 REGISTRY_ID="your-registry-id"
 IMAGE_NAME="diploma-app"
 TAG=${1:-latest}
