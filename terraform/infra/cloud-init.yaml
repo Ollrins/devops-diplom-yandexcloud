@@ -1,0 +1,31 @@
+#cloud-config
+hostname: ${hostname}
+preserve_hostname: true
+
+users:
+  - name: ${ssh_user}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+    groups: users, wheel
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - epel-release
+  - python3
+  - python3-pip
+  - git
+  - vim
+  - wget
+  - curl
+  - net-tools
+  - ntp
+
+runcmd:
+  - systemctl enable --now ntpd
+  - timedatectl set-timezone ${timezone}
+  - systemctl stop firewalld
+  - systemctl disable firewalld

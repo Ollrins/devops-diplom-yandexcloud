@@ -1,0 +1,329 @@
+---
+- name: Подготовка всех узлов Kubernetes
+  hosts: all
+  become: yes
+  vars:
+    kubernetes_version: "1.29"
+
+  tasks:
+    - name: Ожидаем доступности SSH на всех узлах
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+
+    - name: Отключаем swap временно
+      command: swapoff -a
+      changed_when: false
+
+    - name: Отключаем swap навсегда
+      lineinfile:
+        path: /etc/fstab
+        regexp: '^.*swap.*$'
+        state: absent
+
+    - name: Загружаем необходимые модули ядра
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - br_netfilter
+        - overlay
+
+    - name: Настраиваем sysctl
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: net.bridge.bridge-nf-call-iptables, value: 1 }
+        - { key: net.bridge.bridge-nf-call-ip6tables, value: 1 }
+        - { key: net.ipv4.ip_forward, value: 1 }
+
+    - name: Добавляем репозиторий Docker
+      command: dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Устанавливаем containerd
+      dnf:
+        name: containerd.io
+        state: present
+
+    - name: Настраиваем containerd для использования systemd cgroup
+      copy:
+        dest: /etc/containerd/config.toml
+        content: |
+          version = 2
+          [plugins."io.containerd.grpc.v1.cri"]
+            [plugins."io.containerd.grpc.v1.cri".containerd]
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+                runtime_type = "io.containerd.runc.v2"
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+                  SystemdCgroup = true
+      notify: restart containerd
+
+    - name: Запускаем и включаем containerd
+      systemd:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Добавляем репозиторий Kubernetes
+      copy:
+        dest: /etc/yum.repos.d/kubernetes.repo
+        content: |
+          [kubernetes]
+          name=Kubernetes
+          baseurl=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key
+
+    - name: Устанавливаем компоненты Kubernetes
+      dnf:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        disable_gpg_check: yes
+
+    - name: Включаем и запускаем kubelet
+      systemd:
+        name: kubelet
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+
+- name: Инициализация Master-ноды
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Инициализируем кластер kubeadm
+      command: >
+        kubeadm init
+        --pod-network-cidr=10.244.0.0/16
+        --service-cidr=10.96.0.0/12
+        --kubernetes-version=v1.29.0
+        --cri-socket=unix:///run/containerd/containerd.sock
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Настраиваем kubectl для root
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0755'
+
+    - name: Копируем admin.conf
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+        mode: '0600'
+
+    - name: Устанавливаем Flannel CNI
+      command: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Генерируем команду для присоединения воркеров
+      command: kubeadm token create --print-join-command
+      register: join_command_result
+
+- name: Присоединение Worker-нод
+  hosts: workers
+  become: yes
+  tasks:
+    - name: Присоединяемся к кластеру (берем команду напрямую из переменных мастера)
+      command: "{{ hostvars['master'].join_command_result.stdout }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+- name: Установка Ingress и Мониторинга (kube-prometheus)
+  hosts: masters
+  become: yes
+  vars:
+    kubeconfig_path: /root/.kube/config
+    helm_path: /usr/local/bin/helm
+
+  tasks:
+    - name: Убедимся, что git установлен
+      dnf:
+        name: git
+        state: present
+
+    - name: Скачиваем архив Helm
+      get_url:
+        url: https://get.helm.sh/helm-v3.15.2-linux-amd64.tar.gz
+        dest: /tmp/helm.tar.gz
+
+    - name: Распаковываем Helm
+      unarchive:
+        src: /tmp/helm.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Копируем бинарный файл Helm в /usr/local/bin
+      copy:
+        src: /tmp/linux-amd64/helm
+        dest: "{{ helm_path }}"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Устанавливаем pip3
+      dnf:
+        name: python3-pip
+        state: present
+
+    - name: Обновляем oauthlib и requests_oauthlib
+      command: python3 -m pip install --upgrade oauthlib requests_oauthlib
+
+    - name: Устанавливаем Python-библиотеку kubernetes
+      command: python3 -m pip install --upgrade kubernetes
+
+    - name: Добавляем репозиторий ingress-nginx
+      kubernetes.core.helm_repository:
+        name: ingress-nginx
+        repo_url: https://kubernetes.github.io/ingress-nginx
+        binary_path: "{{ helm_path }}"
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Устанавливаем NGINX Ingress Controller
+      kubernetes.core.helm:
+        name: ingress-nginx
+        chart_ref: ingress-nginx/ingress-nginx
+        release_namespace: ingress-nginx
+        create_namespace: true
+        binary_path: "{{ helm_path }}"
+        values:
+          controller:
+            hostNetwork: true
+            hostPort:
+              enabled: true
+              ports:
+                http: 80
+                https: 443
+            kind: DaemonSet
+            service:
+              type: ClusterIP
+            ingressClassResource:
+              default: true
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Добавляем toleration для control-plane в Ingress DaemonSet
+      command: >
+        {{ helm_path }} upgrade ingress-nginx ingress-nginx/ingress-nginx
+        --namespace ingress-nginx
+        --reuse-values
+        --set controller.tolerations[0].key=node-role.kubernetes.io/control-plane
+        --set controller.tolerations[0].operator=Exists
+        --set controller.tolerations[0].effect=NoSchedule
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+
+    - name: Клонируем kube-prometheus
+      git:
+        repo: 'https://github.com/prometheus-operator/kube-prometheus.git'
+        dest: /root/kube-prometheus
+        version: release-0.13
+        force: yes
+
+    - name: Применяем CRD для мониторинга
+      command: kubectl apply --server-side -f /root/kube-prometheus/manifests/setup/
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: crd_apply
+      changed_when: "'configured' in crd_apply.stdout or 'created' in crd_apply.stdout"
+
+    - name: Ожидаем применения CRD
+      pause:
+        seconds: 15
+
+    - name: Применяем манифесты мониторинга
+      command: kubectl apply -f /root/kube-prometheus/manifests/
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: manifests_apply
+      changed_when: "'configured' in manifests_apply.stdout or 'created' in manifests_apply.stdout"
+
+    - name: Создаем Ingress для Grafana с правильным ingressClassName
+      command: kubectl apply -f -
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      args:
+        stdin: |
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: grafana-ingress
+            namespace: monitoring
+            annotations:
+              nginx.ingress.kubernetes.io/rewrite-target: /
+          spec:
+            ingressClassName: nginx
+            rules:
+            - http:
+                paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: grafana
+                      port:
+                        number: 3000
+
+    - name: Получаем пароль администратора Grafana
+      shell: kubectl get deployment grafana -n monitoring -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}={.value}{"\n"}{end}' | grep GF_SECURITY_ADMIN_PASSWORD | cut -d'=' -f2
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: grafana_password_cmd
+      changed_when: false
+      failed_when: false
+
+    - name: Выводим учетные данные Grafana
+      debug:
+        msg:
+          - "=================================================="
+          - "✅ МОНИТОРИНГ УСПЕШНО УСТАНОВЛЕН!"
+          - "Grafana URL: http://{{ ansible_host }}/"
+          - "Login: admin"
+          - "Password: admin"
+          - "=================================================="
+
+- name: Настройка kubectl для пользователя Ollrins
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Создаем директорию .kube для пользователя
+      file:
+        path: /home/Ollrins/.kube
+        state: directory
+        owner: Ollrins
+        group: Ollrins
+        mode: '0700'
+
+    - name: Копируем admin.conf для пользователя Ollrins
+      copy:
+        src: /root/.kube/config
+        dest: /home/Ollrins/.kube/config
+        remote_src: yes
+        owner: Ollrins
+        group: Ollrins
+        mode: '0600'
+
+    - name: Добавляем export KUBECONFIG в .bashrc
+      lineinfile:
+        path: /home/Ollrins/.bashrc
+        line: 'export KUBECONFIG=/home/Ollrins/.kube/config'
+        owner: Ollrins
+        group: Ollrins
+        create: yes
