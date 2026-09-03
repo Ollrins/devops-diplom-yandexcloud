@@ -27,7 +27,7 @@
 - [app/app-deployment.yaml](app/app-deployment.yaml) - Deployment (2 реплики), Service (ClusterIP), Ingress (путь /app)
 
 ### Шаг 6. Настройка CI/CD
-- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) - GitHub Actions workflow (build → push → deploy)
+- [github/workflows/deploy.yml](.github/workflows/deploy.yml) - GitHub Actions workflow (build → push → deploy)
 
 ### Скрипты автоматизации
 - [deploy-all.sh](deploy-all.sh) - скрипт полного развёртывания (Terraform + Ansible + Docker + K8s)
