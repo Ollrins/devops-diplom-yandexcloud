@@ -5,14 +5,14 @@
 ### Файлы манифестов
 
 ### Шаг 1. Создание IAM ресурсов (Terraform)
-- [terraform/iam/main.tf](terraform/iam/main.tf) - сервисный аккаунт, статические ключи, бакет для хранения state-файлов
-- [terraform/iam/variables.tf](terraform/iam/variables.tf) - входные переменные модуля IAM
-- [terraform/iam/outputs.tf](terraform/iam/outputs.tf) - выходные значения (access_key, secret_key)
+- [terraform/iam/main.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/main.tf) - сервисный аккаунт, статические ключи, бакет для хранения state-файлов
+- [terraform/iam/variables.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/variables.tf) - входные переменные модуля IAM
+- [terraform/iam/providers.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/providers.tf) - провайдер Yandex Cloud
 
 ### Шаг 2. Создание инфраструктуры (Terraform)
-- [terraform/infra/main.tf](terraform/infra/main.tf) - VPC, подсети в разных зонах, ВМ master/workers, Container Registry, security groups
-- [terraform/infra/variables.tf](terraform/infra/variables.tf) - входные переменные (ID облака, каталога, образ ВМ)
-- [terraform/infra/outputs.tf](terraform/infra/outputs.tf) - выходные значения (IP-адреса нод, registry_id)
+- [terraform/infra/main.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/main.tf) - VPC, подсети, ВМ master/workers, Container Registry, security groups
+- [terraform/infra/variables.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/variables.tf) - входные переменные (ID облака, каталога, образ ВМ)
+- [terraform/infra/cloud-init.yaml](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/cloud-init.yaml) - скрипт начальной настройки ВМ
 
 ### Шаг 3. Установка Kubernetes кластера (Ansible)
 - [ansible/playbook-rocky.yml](ansible/playbook-rocky.yml) - playbook установки Kubernetes, мониторинга и Ingress
