@@ -1,16 +1,13 @@
 #!/bin/bash
 set -e
 
-echo "=========================================="
 echo "Дипломный практикум: Полное развертывание"
-echo "=========================================="
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-# ==========================================
 # ШАГ 1: IAM
-# ==========================================
+
 echo -e "\n[1/8] Создание IAM ресурсов..."
 cd "$BASE_DIR/terraform/iam"
 terraform init
@@ -23,9 +20,8 @@ terraform apply -auto-approve
 export AWS_ACCESS_KEY_ID=$(terraform output -raw static_access_key)
 export AWS_SECRET_ACCESS_KEY=$(terraform output -raw secret_key)
 
-# ==========================================
 # ШАГ 2: Инфраструктура
-# ==========================================
+
 echo -e "\n[2/8] Создание инфраструктуры..."
 cd "$BASE_DIR/terraform/infra"
 terraform init -backend-config="bucket=dev-oll" -backend-config="key=diploma/terraform.tfstate" -backend-config="region=ru-central1"
@@ -36,9 +32,8 @@ REGISTRY_ID=$(terraform output -raw registry_id)
 echo "✅ Мастер-нода: $MASTER_IP"
 echo "✅ ID реестра: $REGISTRY_ID"
 
-# ==========================================
 # ШАГ 3: Ожидание SSH на всех узлах
-# ==========================================
+
 echo -e "\n[3/8] Ожидание загрузки всех виртуальных машин..."
 ALL_IPS="$MASTER_IP $(cd "$BASE_DIR/terraform/infra" && terraform output -json worker_ips | jq -r '.[]')"
 for ip in $ALL_IPS; do
@@ -51,9 +46,9 @@ for ip in $ALL_IPS; do
     done
 done
 
-# ==========================================
+
 # ШАГ 4: Ansible Inventory
-# ==========================================
+
 echo -e "\n[4/8] Генерация Ansible inventory..."
 cd "$BASE_DIR/ansible"
 WORKER_IPS=$(cd "$BASE_DIR/terraform/infra" && terraform output -json worker_ips | jq -r '.[]')
@@ -78,15 +73,15 @@ ansible_ssh_common_args = '-o StrictHostKeyChecking=no'
 ansible_python_interpreter = /usr/bin/python3
 __INI_END__
 
-# ==========================================
+
 # ШАГ 5: Ansible Playbook
-# ==========================================
+
 echo -e "\n[5/8] Установка Kubernetes и мониторинга..."
 ansible-playbook -i inventory.ini playbook-rocky.yml -v
 
-# ==========================================
+
 # ШАГ 6: Настройка локального kubectl
-# ==========================================
+
 echo -e "\n[6/8] Настройка локального kubectl..."
 ssh -i /home/Ollrins/key Ollrins@$MASTER_IP "mkdir -p /home/Ollrins/.kube && sudo cp /etc/kubernetes/admin.conf /home/Ollrins/.kube/config && sudo chown Ollrins:Ollrins /home/Ollrins/.kube/config && chmod 600 /home/Ollrins/.kube/config"
 scp -q -i /home/Ollrins/key Ollrins@$MASTER_IP:/home/Ollrins/.kube/config ~/.kube/config
@@ -95,9 +90,9 @@ sed -i '/certificate-authority-data/d' ~/.kube/config
 sed -i "/server: https:\/\/$MASTER_IP:6443/a\    insecure-skip-tls-verify: true" ~/.kube/config
 kubectl get nodes
 
-# ==========================================
+
 # ШАГ 7: Сборка и пуш Docker-образа
-# ==========================================
+
 echo -e "\n[7/8] Сборка и пуш Docker-образа..."
 cd "$BASE_DIR/app"
 KEY_FILE="/home/Ollrins/key.json"
@@ -132,9 +127,9 @@ docker tag "$IMAGE_URI" "cr.yandex/$REGISTRY_ID/diploma-app:latest"
 docker push "cr.yandex/$REGISTRY_ID/diploma-app:latest"
 echo "✅ Образ отправлен в реестр."
 
-# ==========================================
+
 # ШАГ 8: Деплой приложения в Kubernetes
-# ==========================================
+
 echo -e "\n[8/8] Деплой приложения в Kubernetes..."
 
 # Создаем секрет для доступа к приватному реестру (если его еще нет)
@@ -208,10 +203,10 @@ echo "Ожидание запуска подов приложения..."
 kubectl rollout status deployment/diploma-app -n default --timeout=120s
 
 echo ""
-echo "=========================================="
-echo " РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО УСПЕШНО"
-echo "=========================================="
+
+echo " Развертывание завершено успешно"
+
 echo "📊 Grafana:       http://$MASTER_IP/"
 echo "🌐 Приложение:    http://$MASTER_IP/app"
 echo "📦 Реестр:        $REGISTRY_ID"
-echo "=========================================="
+
