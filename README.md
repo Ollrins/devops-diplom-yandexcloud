@@ -51,7 +51,7 @@
 
 ### Шаг 3. Сборка и публикация Docker-образа
 
-<p align="center"> <img src="S/S7.png" width="900"/> <br> <em>Рисунок 6 - Docker-образ в Yandex Container Registry</em> </p>
+<p align="center"> <img src="S/S7.png" width="600"/> <br> <em>Рисунок 6 - Docker-образ в Yandex Container Registry</em> </p>
 
 ### Шаг 4. Развёртывание приложения в Kubernetes
 
