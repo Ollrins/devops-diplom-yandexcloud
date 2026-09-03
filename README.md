@@ -4,26 +4,27 @@
 
 ### Файлы манифестов
 
+## Структура проекта
+
 ### Шаг 1. Создание IAM ресурсов (Terraform)
-- [terraform/iam/main.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/main.tf) - сервисный аккаунт, статические ключи, бакет для хранения state-файлов
-- [terraform/iam/variables.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/variables.tf) - входные переменные модуля IAM
-- [terraform/iam/providers.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/iam/providers.tf) - провайдер Yandex Cloud
+- [terraform/iam/main.tf](terraform/iam/main.tf) - сервисный аккаунт, статические ключи, бакет для хранения state-файлов
+- [terraform/iam/variables.tf](terraform/iam/variables.tf) - входные переменные модуля IAM
+- [terraform/iam/providers.tf](terraform/iam/providers.tf) - конфигурация провайдера Yandex Cloud
 
 ### Шаг 2. Создание инфраструктуры (Terraform)
-- [terraform/infra/main.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/main.tf) - VPC, подсети, ВМ master/workers, Container Registry, security groups
-- [terraform/infra/variables.tf](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/variables.tf) - входные переменные (ID облака, каталога, образ ВМ)
-- [terraform/infra/cloud-init.yaml](https://github.com/Ollrins/devops-diplom-yandexcloud/blob/main/terraform/infra/cloud-init.yaml) - скрипт начальной настройки ВМ
+- [terraform/infra/main.tf](terraform/infra/main.tf) - VPC, подсети, ВМ master/workers, Container Registry, security groups
+- [terraform/infra/variables.tf](terraform/infra/variables.tf) - входные переменные (ID облака, каталога, образ ВМ)
+- [terraform/infra/cloud-init.yaml](terraform/infra/cloud-init.yaml) - скрипт начальной настройки ВМ
 
 ### Шаг 3. Установка Kubernetes кластера (Ansible)
 - [ansible/playbook-rocky.yml](ansible/playbook-rocky.yml) - playbook установки Kubernetes, мониторинга и Ingress
-- [ansible/inventory.ini](ansible/inventory.ini) - инвентарь хостов (мастер и воркеры)
 
-### Шаг 4. Сборка Docker-образа
+### Шаг 4. Сборка Docker-образа и приложение
 - [app/Dockerfile](app/Dockerfile) - описание образа приложения на базе nginx
 - [app/index.html](app/index.html) - HTML-страница тестового приложения
 
 ### Шаг 5. Развёртывание приложения в Kubernetes
-- [k8s-manifests/app-deployment.yaml](k8s-manifests/app-deployment.yaml) - Deployment (2 реплики), Service (ClusterIP), Ingress (путь /app)
+- [app/app-deployment.yaml](app/app-deployment.yaml) - Deployment (2 реплики), Service (ClusterIP), Ingress (путь /app)
 
 ### Шаг 6. Настройка CI/CD
 - [.github/workflows/deploy.yml](.github/workflows/deploy.yml) - GitHub Actions workflow (build → push → deploy)
@@ -33,6 +34,7 @@
 - [destroy-all.sh](destroy-all.sh) - скрипт безопасного удаления всех ресурсов
 
 ---
+
 ## Скриншоты
 
 ### Шаг 1. Создание инфраструктуры (Terraform)
