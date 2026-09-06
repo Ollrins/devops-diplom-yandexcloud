@@ -61,4 +61,8 @@
 
 <p align="center"> <img src="S/S2.png" width="900"/> <br> <em>Рисунок 8 - Grafana дашборд с метриками Kubernetes кластера</em> </p>
 
+### Шаг 6. Настройка CI/CD
+
+<p align="center"> <img src="S/S9.png" width="900"/> <br> <em>Рисунок 9 - Успешное завершение CI/CD пайплайна в GitHub Actions</em> </p>
+
 ---
