@@ -11,7 +11,7 @@ on:
       - main
 
 env:
-  REGISTRY_ID: crp4r0nq5ai4a1bjoq3m
+  REGISTRY_ID: ${{ secrets.REGISTRY_ID }}
   IMAGE_NAME: diploma-app
 
 jobs:
